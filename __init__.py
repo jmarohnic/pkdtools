@@ -3,8 +3,8 @@
 # Basic classes and I/O.
 from .particle import Particle
 from .assembly import Assembly
-from .io import ss_in
-from .io import ss_out
+from .pkdio import ss_in
+from .pkdio import ss_out
 
 # Miscellaneous functions from tools.py
 from .tools import join
