@@ -16,7 +16,7 @@ import os
 import pandas as pd
 import subprocess as sp
 
-from ..io import ss_in
+from ..pkdio import ss_in
 from .. import rp
 
 # A new class intended to accumulate data as walk_grid() progresses through a given tidal suite of runs.
