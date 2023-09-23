@@ -73,6 +73,7 @@ def walk_grid(q_list, vinf_list, filename=None, fraggrids=[], stepgrids=[], othe
     if stepgrids != []:
         for grid in stepgrids:
             grid.save_csv()
+    # "Other" grids are saved in Python pickle format rather than csv to accomodate non-numeric data like histograms.
     if othergrids != []:
         for grid in othergrids:
             grid.save_pickle()
