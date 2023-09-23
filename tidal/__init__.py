@@ -7,6 +7,7 @@ from .dgrid import walk_grid
 from .dgrid import analyze_frags
 from .dgrid import analyze_steps
 from .dgrid import analyze_other
+from .dgrid import gen_walk
 
 # Analysis Functions
 from .dgrid import largest_fragment_fraction
@@ -26,5 +27,6 @@ from .dgrid import get_steps
 from .dgrid import final_step
 
 # Import from pgrid.py
-from .pgrid import load_grid
+from .pgrid import load_csv_grid
+from .pgrid import load_pickle_grid
 from .pgrid import plot_grid

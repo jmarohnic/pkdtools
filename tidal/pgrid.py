@@ -14,11 +14,21 @@ import seaborn as sb
 import pandas as pd
 
 # Read a DataGrid csv file and process in preparation for plotting. The DataGrid class is defined in grid_call.py.
-def load_grid(filename):
+def load_csv_grid(filename):
     grid = pd.read_csv(filename, index_col=0)
     grid = grid.transpose()
     # Gross hack to fix weird numbering issue. E.g. '1.2' rendering as '1.200000000002'. Something to do with numpy linspace().
-    grid.rename(columns={grid.columns[1]: 1.2, grid.columns[6]: 1.7}, inplace=True)
+    #grid.rename(columns={grid.columns[1]: 1.2, grid.columns[6]: 1.7}, inplace=True)
+    
+    return grid
+
+# Read a DataGrid pickle file and process in preparation for plotting. The DataGrid class is defined in grid_call.py.
+def load_pickle_grid(filename):
+    #grid = pd.read_pickle(filename, index_col=0)
+    grid = pd.read_pickle(filename)
+    grid = grid.transpose()
+    # Gross hack to fix weird numbering issue. E.g. '1.2' rendering as '1.200000000002'. Something to do with numpy linspace().
+    #grid.rename(columns={grid.columns[1]: 1.2, grid.columns[6]: 1.7}, inplace=True)
     
     return grid
 

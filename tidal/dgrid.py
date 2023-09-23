@@ -39,8 +39,11 @@ class DataGrid:
     def write(self, q, vinf, val):
         self.grid.at[q, vinf] = val
 
-    def save(self):
+    def save_csv(self):
         self.grid.to_csv(self.filename)
+
+    def save_pickle(self):
+        self.grid.to_pickle(self.filename)
 
 # Step through each run and call the desired analysis functions on the last file.
 # 'fragrids' should be a list of DataGrids for analyses that take a list of all fragments as input.
@@ -66,13 +69,13 @@ def walk_grid(q_list, vinf_list, filename=None, fraggrids=[], stepgrids=[], othe
     # Write each grid to a file.
     if fraggrids != []:
         for grid in fraggrids:
-            grid.save()
+            grid.save_csv()
     if stepgrids != []:
         for grid in stepgrids:
-            grid.save()
+            grid.save_csv()
     if othergrids != []:
         for grid in othergrids:
-            grid.save()
+            grid.save_pickle()
 
 # Load data, find rp's and clean up Earth particle. Any further fragment cleaning should happen in the
 # analysis function, since this may be treated differently for different metrics. Grouping this way avoids 
@@ -369,3 +372,18 @@ def get_steps(stepsize, zeropad, init="initcond.ss"):
 def final_step(stepsize, zeropad):
     steps = get_steps(stepsize, zeropad)
     return steps[-1]
+
+# A much more general approach to traversing a suite of tidal encounter-style runs, in contrast to walk_grid().
+# Accepts q and vinf lists to be treated as a grid a function to be called with no arguments. Anything can
+# go in this function.
+def gen_walk(q_list, vinf_list, func):
+    for vinf in vinf_list:
+        for q in q_list:
+            dir = f"q{q:.1f}_vinf{vinf}"
+            if os.path.exists(dir):
+                print(f"Entering {dir}")
+                os.chdir(dir)
+                func()
+                os.chdir("..")
+            else:
+                print(f"{dir} not found, skipping.")
