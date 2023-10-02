@@ -146,7 +146,8 @@ def rm_earth(assembly):
     if len(earth_id) > 1:
         raise ValueError("Assembly has more than one Earth candidate particle.")
     elif len(earth_id) == 0:
-        raise ValueError("Assembly has no Earth particle.")
+        print("No Earth particle found. No changes made.")
+        return assembly
     else:
         earth_id = earth_id[0]
 
