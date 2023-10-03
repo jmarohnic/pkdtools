@@ -96,7 +96,6 @@ class Assembly(list):
             raise ValueError("Something has gone wrong here!")
             return 1
 
-
     # Return a tuple with the minimum and maximum x positions over all particles in the assembly. There may be a nicer way to package this info?
     # Originally called "xrange" etc., but unfortunately this name was already taken by a Python builtin.
     def xbounds(self):
@@ -137,6 +136,18 @@ class Assembly(list):
         centz = zmin + (zmax - zmin)/2
 
         return np.array([centx, centy, centz])
+
+    # Calculate angular frequency vector of an assembly.
+    def ang_freq(self):
+        return np.dot(np.linalg.inv(self.I()), self.L())
+
+    # Calculate rotational frequency vector of an assembly. Probably not necessary to include with ang_freq().
+    def freq(self):
+        return self.ang_freq()/(2*np.pi)
+
+    # Calculate the net spin period of an assembly.
+    def period(self):
+        return 1/np.linalg.norm(self.freq())
 
     # Translate all particles so that the assembly has the new center of mass position.
     # Roundoff error could be an issue here when moving com by a large amount. Should
@@ -282,6 +293,7 @@ class Assembly(list):
             L_vector += np.cross(r, p)
             L_vector += q*m*w
 
+        #L_vector.sort()
         return L_vector
 
     # Calculate the DEEVE semi-axes, equivalent radius, and bulk density. Formulae taken from rpu.c and rpx.c.

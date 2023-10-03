@@ -112,7 +112,7 @@ class Particle:
     def vel(self):
         return np.array([self.vx, self.vy, self.vz])
 
-    # Return particle spin vector.
+    # Return particle spin vector (angular frequency, rad/s).
     def spin(self):
         return np.array([self.wx, self.wy, self.wz])
 
