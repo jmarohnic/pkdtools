@@ -285,6 +285,21 @@ def largest_fragment_orbiting(frags):
 
     return orbit_mass/M
 
+# Return the spin period of the largest post-encounter fragment in units of hours.
+def largest_fragment_period(frags):
+    # Set units to mks to get a period in seconds. Convert to hours at the end.
+    for frag in frags:
+        frag.units = 'mks'
+    
+    if len(frags) == 0:
+        return float("nan")
+
+    large = frags[0]
+    period = large.period()
+
+    # Factor of 3600 accounts for seconds --> hours unit conversion.
+    return period/3600.
+
 # Need to write up a better version of this---get a better handle on units first. Currently returns a value in km regardless of units input.
 def tidal_threshold(q, vinf, steplist, units='pkd'):
     # Set "disruption threshold" of 0.5% of radius.

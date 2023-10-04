@@ -12,6 +12,7 @@ from .dgrid import gen_walk
 # Analysis Functions
 from .dgrid import largest_fragment_fraction
 from .dgrid import largest_fragment_elongation
+from .dgrid import largest_fragment_period
 from .dgrid import N_fragments
 from .dgrid import largest_fragment_bound
 from .dgrid import largest_fragment_orbiting
