@@ -136,45 +136,25 @@ def analyze_other(q, vinf, *othergrids, units='pkd'):
         value = grid.func(q, vinf, units=units)
         grid.write(q, vinf, value)
 
-# Get rid of the earth particle, if present.
-def rm_earth(assembly):
-    copy = assembly.copy()
-    copy.units = 'pkd'
+# A much more general approach to traversing a suite of tidal encounter-style runs, in contrast to walk_grid().
+# Accepts q and vinf lists to be treated as a grid a function to be called with no arguments. Anything can
+# go in this function.
+def gen_walk(q_list, vinf_list, func):
+    for vinf in vinf_list:
+        for q in q_list:
+            dir = f"q{q:.1f}_vinf{vinf}"
+            if os.path.exists(dir):
+                print(f"Entering {dir}")
+                os.chdir(dir)
+                func()
+                os.chdir("..")
+            else:
+                print(f"{dir} not found, skipping.")
 
-    earth_id = [particle.iOrder for particle in copy if particle.m > 3e-6]
 
-    if len(earth_id) > 1:
-        raise ValueError("Assembly has more than one Earth candidate particle.")
-    elif len(earth_id) == 0:
-        print("No Earth particle found. No changes made.")
-        return assembly
-    else:
-        earth_id = earth_id[0]
 
-    # Remove earth particle and restore input assembly units.
-    copy.del_particles(earth_id)
-    copy.units = assembly.units
-    return copy
 
-# Pop Earth particle from assembly, if present.
-def pop_earth(assembly):
-    copy = assembly.copy()
-    copy.units = 'pkd'
-
-    earth_id = [particle.iOrder for particle in copy if particle.m > 3e-6]
-
-    if len(earth_id) > 1:
-        raise ValueError("Assembly has more than one Earth candidate particle.")
-    elif len(earth_id) == 0:
-        raise ValueError("Assembly has no Earth particle.")
-    else:
-        earth_id = earth_id[0]
-
-    earth = copy.get_particle(earth_id)
-    earth.units = assembly.units
-    assembly.del_particles(earth_id)
-
-    return earth
+#### FRAG GRIDS ####
 
 # Returns the mass fraction of the most massive fragment in the list of rubble piles.
 def largest_fragment_fraction(frags):
@@ -300,6 +280,73 @@ def largest_fragment_period(frags):
     # Factor of 3600 accounts for seconds --> hours unit conversion.
     return period/3600.
 
+
+
+
+#### STEP GRIDS ####
+
+# Return the fraction of material in the largest fragment that came from the inner 50% of the initial body by *mass*.
+def largest_fragment_halfmat(q, vinf, steplist, units='pkd'):
+    # Load initial step data and and calculate CoM and radius.
+    init = ss_in(steplist[0], units=units)
+    init = rm_earth(init)
+    initR = init.R()
+    initcom = init.com()
+    depth_dict = {}
+
+    # Assign depth values of 0 for "surface" material and 1 for "core" material to build a "depth dictionary" for particles.
+    for particle in init:
+        # The coefficient on initR is the fraction of the radius you need to split the volume of a sphere in two, assuming a uniform
+        # density distribution.
+        if np.linalg.norm(particle.pos() - initcom) < (1/(2**(1/3)))*initR:
+            depth_dict[particle.iOrder] = 1
+        else:
+            depth_dict[particle.iOrder] = 0
+
+    # Split final output into fragments. Calculate fraction of largest fragment that has a "core" tag, using core_total as a counter.
+    final = ss_in(steplist[-1], units=units)
+    final = rm_earth(final)
+    final_frags = final.find_rp(L=1.2)
+    large = final_frags[0]
+    core_total = 0
+
+    for particle in large:
+        if depth_dict[particle.iOrder] == 1:
+            core_total += 1
+
+    return core_total/large.N()
+
+# Return the fraction of material in the largest fragment that came from the inner 50% of the initial body by *radius*. Identical to
+# largest fragment_halfmat, but with a different criterion for "core". Here, any particle closer to the center than half of the radius
+# is considered core. This is a more restrictive condition, so we should expect lower values.
+def largest_fragmment_halfrad(q, vinf, steplist, units='pkd'):
+    # Load initial step data and and calculate CoM and radius.
+    init = ss_in(steplist[0], units=units)
+    init = rm_earth(init)
+    initR = init.R()
+    initcom = init.com()
+    depth_dict = {}
+
+    # Assign depth values of 0 for "surface" material and 1 for "core" material to build a "depth dictionary" for particles.
+    for particle in init:
+        if np.linalg.norm(particle.pos() - initcom) < 0.5*initR:
+            depth_dict[particle.iOrder] = 1
+        else:
+            depth_dict[particle.iOrder] = 0
+
+    # Split final output into fragments. Calculate fraction of largest fragment that has a "core" tag, using core_total as a counter.
+    final = ss_in(steplist[-1], units=units)
+    final = rm_earth(final)
+    final_frags = final.find_rp(L=1.2)
+    large = final_frags[0]
+    core_total = 0
+
+    for particle in large:
+        if depth_dict[particle.iOrder] == 1:
+            core_total += 1
+
+    return core_total/large.N()
+
 # Need to write up a better version of this---get a better handle on units first. Currently returns a value in km regardless of units input.
 def tidal_threshold(q, vinf, steplist, units='pkd'):
     # Set "disruption threshold" of 0.5% of radius.
@@ -357,6 +404,12 @@ def tidal_run_complete(q, vinf, steplist, units='pkd'):
     else:
         return True
 
+
+
+
+#### UTILITY ####
+
+# Extract the iOutInterval value from ss.par
 def get_stepsize():
     if os.path.exists("ss.par"):
         stepsize = sp.check_output("grep iOutInterval ss.par | awk '{print $3}'", shell=True)
@@ -364,6 +417,7 @@ def get_stepsize():
     else:
         raise ValueError("No ss.par file found, cannot determine stepsize.")
 
+# Extract the nDigits value from ss.par
 def get_zeropad():
     if os.path.exists("ss.par"):
         zeropad = sp.check_output("grep nDigits ss.par | awk '{print $3}'", shell=True)
@@ -371,6 +425,12 @@ def get_zeropad():
     else:
         raise ValueError("No ss.par file found, cannot determine ss file digit mask.")
 
+# Find the final sequential ss output file in the current directory.
+def final_step(stepsize, zeropad):
+    steps = get_steps(stepsize, zeropad)
+    return steps[-1]
+
+# Return a list of all sequential ss output files in the current directory, including init.
 def get_steps(stepsize, zeropad, init="initcond.ss"):
     step_num = stepsize
     cur_step = f"ss.{0:0{zeropad}}"
@@ -386,21 +446,42 @@ def get_steps(stepsize, zeropad, init="initcond.ss"):
 
     return all_steps
 
-def final_step(stepsize, zeropad):
-    steps = get_steps(stepsize, zeropad)
-    return steps[-1]
+# Get rid of the earth particle, if present.
+def rm_earth(assembly):
+    copy = assembly.copy()
+    copy.units = 'pkd'
 
-# A much more general approach to traversing a suite of tidal encounter-style runs, in contrast to walk_grid().
-# Accepts q and vinf lists to be treated as a grid a function to be called with no arguments. Anything can
-# go in this function.
-def gen_walk(q_list, vinf_list, func):
-    for vinf in vinf_list:
-        for q in q_list:
-            dir = f"q{q:.1f}_vinf{vinf}"
-            if os.path.exists(dir):
-                print(f"Entering {dir}")
-                os.chdir(dir)
-                func()
-                os.chdir("..")
-            else:
-                print(f"{dir} not found, skipping.")
+    earth_id = [particle.iOrder for particle in copy if particle.m > 3e-6]
+
+    if len(earth_id) > 1:
+        raise ValueError("Assembly has more than one Earth candidate particle.")
+    elif len(earth_id) == 0:
+        print("No Earth particle found. No changes made.")
+        return assembly
+    else:
+        earth_id = earth_id[0]
+
+    # Remove earth particle and restore input assembly units.
+    copy.del_particles(earth_id)
+    copy.units = assembly.units
+    return copy
+
+# Pop Earth particle from assembly, if present.
+def pop_earth(assembly):
+    copy = assembly.copy()
+    copy.units = 'pkd'
+
+    earth_id = [particle.iOrder for particle in copy if particle.m > 3e-6]
+
+    if len(earth_id) > 1:
+        raise ValueError("Assembly has more than one Earth candidate particle.")
+    elif len(earth_id) == 0:
+        raise ValueError("Assembly has no Earth particle.")
+    else:
+        earth_id = earth_id[0]
+
+    earth = copy.get_particle(earth_id)
+    earth.units = assembly.units
+    assembly.del_particles(earth_id)
+
+    return earth
