@@ -17,8 +17,6 @@ import pandas as pd
 def load_csv_grid(filename):
     grid = pd.read_csv(filename, index_col=0)
     grid = grid.transpose()
-    # Gross hack to fix weird numbering issue. E.g. '1.2' rendering as '1.200000000002'. Something to do with numpy linspace().
-    #grid.rename(columns={grid.columns[1]: 1.2, grid.columns[6]: 1.7}, inplace=True)
     
     return grid
 
@@ -27,13 +25,11 @@ def load_pickle_grid(filename):
     #grid = pd.read_pickle(filename, index_col=0)
     grid = pd.read_pickle(filename)
     grid = grid.transpose()
-    # Gross hack to fix weird numbering issue. E.g. '1.2' rendering as '1.200000000002'. Something to do with numpy linspace().
-    #grid.rename(columns={grid.columns[1]: 1.2, grid.columns[6]: 1.7}, inplace=True)
     
     return grid
 
 # Intented to plot multiple data grids. big_size and med_size parameters are for plot text. 
-def plot_grid(title, rows, columns, datagrids=[], labels=[], cmaps=[], big_size=32, med_size=28, xtick_freq=2):
+def plot_grid(title, rows, columns, datagrids=[], labels=[], cmaps=[], center=None, big_size=32, med_size=28, xtick_freq=2):
     if len(datagrids) != len(labels):
         raise ValueError("Number of labels must match number of data grids.")
 
@@ -50,17 +46,27 @@ def plot_grid(title, rows, columns, datagrids=[], labels=[], cmaps=[], big_size=
 
         if current_min < min_val:
             min_val = current_min
-        
+
+    # Colorbar centering options. We can specify nothing (just set colorbar based on limits), set center to zero, in which
+    # case the value '0' will be set to the center of the colorbar, or 'True', which centers the midpoint between the extreme
+    # values at the middle of the colorbar range.
+    if center == 'True':
+        center = (min_val + max_val)/2
+    elif center == 0:
+        center = 0
+    else:
+        center = None
+
     fig, axes = plt.subplots(rows, columns, sharey=True)
 
     for i, grid in enumerate(datagrids):
         # Last plot/bottom row in a column must show x-axis labels in addition to y-axis labels. rows*columns gives total tiles, bottom row
         # should be last N tiles, where N is the number of *columns* plotted.
         if (rows*columns - i) <= columns:
-            sb.heatmap(grid, vmin=min_val, vmax=max_val, linewidth=0.5, xticklabels=xtick_freq, ax=axes.flat[i], cmap=cmaps[i])
+            sb.heatmap(grid, vmin=min_val, vmax=max_val, linewidth=0.5, xticklabels=xtick_freq, ax=axes.flat[i], cmap=cmaps[i], center=center)
             axes.flat[i].xaxis.set_tick_params(labelsize=med_size)
         else:
-            sb.heatmap(grid, vmin=min_val, vmax=max_val, linewidth=0.5, xticklabels=False, ax=axes.flat[i], cmap=cmaps[i])
+            sb.heatmap(grid, vmin=min_val, vmax=max_val, linewidth=0.5, xticklabels=False, ax=axes.flat[i], cmap=cmaps[i], center=center)
 
         axes.flat[i].invert_yaxis()
         axes.flat[i].set_title(labels[i], fontsize=big_size)
