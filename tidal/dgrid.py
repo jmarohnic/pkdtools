@@ -285,8 +285,8 @@ def largest_fragment_period(frags):
 
 #### STEP GRIDS ####
 
-# Return the fraction of material in the largest fragment that came from the inner 50% of the initial body by *mass*.
-def largest_fragment_halfmat(q, vinf, steplist, units='pkd'):
+# Return the fraction of material in the largest fragment that came from the inner 50% of the initial body by *volume*.
+def largest_fragment_volcore(q, vinf, steplist, units='pkd'):
     # Load initial step data and and calculate CoM and radius.
     init = ss_in(steplist[0], units=units)
     init = rm_earth(init)
@@ -314,12 +314,13 @@ def largest_fragment_halfmat(q, vinf, steplist, units='pkd'):
         if depth_dict[particle.iOrder] == 1:
             core_total += 1
 
+    print(core_total/large.N())
     return core_total/large.N()
 
 # Return the fraction of material in the largest fragment that came from the inner 50% of the initial body by *radius*. Identical to
-# largest fragment_halfmat, but with a different criterion for "core". Here, any particle closer to the center than half of the radius
+# largest fragment_volcore, but with a different criterion for "core". Here, any particle closer to the center than half of the radius
 # is considered core. This is a more restrictive condition, so we should expect lower values.
-def largest_fragmment_halfrad(q, vinf, steplist, units='pkd'):
+def largest_fragment_radcore(q, vinf, steplist, units='pkd'):
     # Load initial step data and and calculate CoM and radius.
     init = ss_in(steplist[0], units=units)
     init = rm_earth(init)
@@ -345,6 +346,7 @@ def largest_fragmment_halfrad(q, vinf, steplist, units='pkd'):
         if depth_dict[particle.iOrder] == 1:
             core_total += 1
 
+    print(core_total/large.N())
     return core_total/large.N()
 
 # Need to write up a better version of this---get a better handle on units first. Currently returns a value in km regardless of units input.
@@ -372,10 +374,12 @@ def tidal_threshold(q, vinf, steplist, units='pkd'):
 def tidal_run_complete(q, vinf, steplist, units='pkd'):
     # Load initial and final step data, divide into fragments and calculate the mass fraction bound to the largest piece.
     init = ss_in(steplist[0], units=units)
+    init = rm_earth(init)
     init_frags = init.find_rp()
     init_bound_frac = largest_fragment_bound(init_frags)
 
     final = ss_in(steplist[-1], units=units)
+    final = rm_earth(final)
     final_frags = final.find_rp()
     final_bound_frac = largest_fragment_bound(final_frags)
 
@@ -465,6 +469,7 @@ def rm_earth(assembly):
     copy.del_particles(earth_id)
     copy.units = assembly.units
     return copy
+Assembly.rm_earth = rm_earth
 
 # Pop Earth particle from assembly, if present.
 def pop_earth(assembly):
@@ -485,3 +490,4 @@ def pop_earth(assembly):
     assembly.del_particles(earth_id)
 
     return earth
+Assembly.pop_earth = pop_earth
