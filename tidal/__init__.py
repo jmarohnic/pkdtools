@@ -18,6 +18,8 @@ from .dgrid import largest_fragment_bound
 from .dgrid import largest_fragment_orbiting
 from .dgrid import tidal_threshold
 from .dgrid import tidal_run_complete
+from .dgrid import largest_fragment_volcore
+from .dgrid import largest_fragment_radcore
 
 # Utilities
 from .dgrid import rm_earth
