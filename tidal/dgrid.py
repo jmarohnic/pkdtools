@@ -16,6 +16,7 @@ import os
 import pandas as pd
 import subprocess as sp
 
+from ..assembly import Assembly
 from ..pkdio import ss_in
 from .. import rp
 
@@ -374,12 +375,12 @@ def tidal_threshold(q, vinf, steplist, units='pkd'):
 def tidal_run_complete(q, vinf, steplist, units='pkd'):
     # Load initial and final step data, divide into fragments and calculate the mass fraction bound to the largest piece.
     init = ss_in(steplist[0], units=units)
-    init = rm_earth(init)
+    init = init.rm_earth()
     init_frags = init.find_rp()
     init_bound_frac = largest_fragment_bound(init_frags)
 
     final = ss_in(steplist[-1], units=units)
-    final = rm_earth(final)
+    final = final.rm_earth()
     final_frags = final.find_rp()
     final_bound_frac = largest_fragment_bound(final_frags)
 
