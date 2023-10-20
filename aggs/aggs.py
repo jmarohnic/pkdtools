@@ -1,32 +1,63 @@
-##################################################################
+#####################################################################
 # aggs.py
-# Julian C. Marohnic
-# Created: 8/16/23
-# Adapted from earlier work (c. 2022-23) by JCM and JVD.
+# Joseph V. DeMartini and Julian C. Marohnic
+# Created 10/18/23
+# Adapted from earlier work (c. 2022-23) by JCM and JVD
 #
 # A set of useful methods for aggregates and functions for generating
-# the regular aggregate shapes: dumbbell, diamond, rod, tetrahedron,
-# and cube.
-##################################################################
+# aggregate particles, including the regular aggregate shapes:
+# dumbbell, diamond, rod, tetrahedron, and cube.
+#####################################################################
 
 import numpy as np
-
 from ..particle import Particle
 from ..assembly import Assembly
 
-# Find agg with largest (negative) index.
-def agg_max(self):
+try:
+    import scipy.optimize as sco
+    from scipy.spatial import ConvexHull
+except ModuleNotFoundError:
+    print("SciPy module not found. Try installing with 'pip install scipy'")
+
+try:
+    from sklearn.decomposition import PCA
+    gen_poly = True
+except ModuleNotFoundError:
+    print("Scikit-learn module not found. Try installing with "
+           "'pip install -U scikit-learn'")
+
+try:
+    import alphashape
+    alphashape_installed = True
+except ModuleNotFoundError:
+    alphashape_installed = False
+    print("Alphashape module not found. Try installing with "
+           "'pip install alphashape'")
+
+### Assembly Aggs Functions ###
+def agg_max(self): # For these first 3 funcs, shouldn't we do agg_list first then return the values?
     return min([particle.iOrgIdx for particle in self])
 Assembly.agg_max = agg_max
 
 def agg_min(self):
     return max([particle.iOrgIdx for particle in self if particle.iOrgIdx < 0])
-Assembly.agg_min = agg_min
+Assembly.agg_range = agg_range
 
 def agg_range(self):
     agg_tags = [particle.iOrgIdx for particle in self if particle.iOrgIdx < 0]
     return (max(agg_tags), min(agg_tags))
 Assembly.agg_range = agg_range
+
+"""
+def agg_max(self):
+    return self.agg_list[-1]	# or max(agg_list)
+
+def agg_min(self):
+    return self.agg_list[0]	# or min(agg_list)
+
+def agg_range(self):
+    return (self.agg_max, self.agg_min)
+"""
 
 def agg_list(self):
     agg_list = np.unique([particle.iOrgIdx for particle in self if particle.iOrgIdx < 0])
@@ -35,18 +66,17 @@ def agg_list(self):
     if len(agg_list) == 0:
         print("No aggs in this assembly.")
         return None
-    else:
-        # Return reversed agg_list, starting with -1.
+    else:	# Return reversed agg_list, starting with -1
         return agg_list[::-1]
 Assembly.agg_list = agg_list
 
-# Return number of aggs in the assembly.
 def N_aggs(self):
+    # Return number of aggs in the assembly.
     return len(self.agg_list())
 Assembly.N_aggs = N_aggs
 
-# Returns a new assembly consisting only of particles in the desired aggregate.
 def get_agg(self, iOrgIdx):
+    # Returns a new assembly consisting only of particles in the desired aggregate.
     if not isinstance(iOrgIdx, int):
         raise TypeError("Warning: get_agg() takes a single negative integer as its argument.")
     if iOrgIdx >= 0:
@@ -56,21 +86,24 @@ def get_agg(self, iOrgIdx):
     return Assembly(*matches, units=self.units, time=self.time)
 Assembly.get_agg = get_agg
 
-# Delete specified aggs from the assembly.
 def del_aggs(self, *iOrgIdxs):
+    # Delete specified aggs from the assembly.
     for element in iOrgIdxs:
         if not isinstance(element, int):
             raise TypeError("Warning: del_agg() takes negative integers as arguments.\n"
-                            "If you would like to use a list to specify the aggs to be deleted, use the '*' operator.\n")
+                            "If you would like to use a list to specify the aggs to be deleted, "
+                            "use the '*' operator.\n")
         if element >= 0:
             raise ValueError("Warning: del_agg() takes negative integers as arguments.\n"
-                            "If you would like to use a list to specify the aggs to be deleted, use the '*' operator.\n")
+                            "If you would like to use a list to specify the aggs to be deleted, "
+                            "use the '*' operator.\n")
     del_list = [particle.iOrder for particle in self if particle.iOrgIdx in iOrgIdxs]
     self.del_particles(*del_list)
 Assembly.del_aggs = del_aggs
 
-# "Pop" the desired agg from the assembly, deleting it from the assembly and returning a new copy.
 def pop_agg(self, iOrgIdx):
+    # "Pop" the desired agg from the assembly, deleting it from the assembly and returning
+    #   a new copy.
     if not isinstance(iOrgIdx, int):
         raise TypeError("Warning: pop_agg() takes a single negative integer as its argument.")
     if iOrgIdx >= 0:
@@ -85,18 +118,18 @@ def pop_agg(self, iOrgIdx):
     return new
 Assembly.pop_agg = pop_agg
 
-# Find any single particles with iOrgIdx < 0 ("orphans") and set iOrgIdx = iOrder.
-# Currently very slow. Consider ways to make this operation more efficient.
 def fix_orphans(self):
+    # Find any single particles with iOrgIdx < 0 ("orphans") and set iOrgIdx = iOrder.
+    # **Currently very slow. Consider ways to make this operation more efficient. **
     agg_tags = [particle.iOrgIdx for particle in self if particle.iOrgIdx < 0]
     orphans = []
-    for index in agg_tags:
-        if agg_tags.count(index) == 1:
+    for index in agg_tags:	# I believe this is the slow part.
+        if agg_tags.count(index) == 1:	#Here you double search the whole size of your array
             orphans.append(index)
 
     if len(orphans) == 0:
         print("No orphan particles found in this assembly.")
-        return None
+        return
 
     for particle in self:
         if particle.iOrgIdx in orphans:
@@ -105,8 +138,8 @@ def fix_orphans(self):
     print(len(orphans), "orphan(s) corrected.")
 Assembly.fix_orphans = fix_orphans
 
-# Renumbers negative iOrgIdxs consecutively, keeping aggregates together
 def condense_aggs(self, direction='d'):
+    # Renumbers negative iOrgIdxs consecutively, keeping aggregates together
     self.fix_orphans()
 
     iAggIdxCounter = decrement = 0
@@ -124,14 +157,19 @@ def condense_aggs(self, direction='d'):
         self.sort_iOrgIdx('a')
 Assembly.condense_aggs = condense_aggs
 
-# Return a list of assemblies, each containing one agg from the assembly passed in. Units match those of
-# the assembly argument unless an alternative is specified.
-def all_aggs(self, units=None):
+def all_aggs(self, time=0.0, units=None):
+    # Return a list of assemblies, each containing one agg from the assembly passed in.
+    # Units match those of the assembly argument unless an alternative is specified.
     if units == None:
         units = self.units
     # Check for valid specification of units.
     if units not in ['pkd', 'mks', 'cgs']:
         raise ValueError("Valid units arguments are 'pkd', 'mks', and 'cgs'.")
+    # Check for valid time specification
+    if not isinstance(time, float):
+        raise TypeError("Time value must be a positive, real number.")
+    if time < 0.0:
+        raise ValueError("Time value must be a positive, real number.")
 
     # Get all negative iOrgIdx values.
     agg_list = self.agg_list()
@@ -139,253 +177,415 @@ def all_aggs(self, units=None):
     # Create a new assembly for each agg and add it to the list.
     aggs = []
     for i in agg_list:
-        aggs.append(Assembly(*[particle for particle in self if particle.iOrgIdx == i], units=units))
+        aggs.append(Assembly(*[particle for particle in self if particle.iOrgIdx == i],
+                     time=time, units=units))
 
     return aggs
 Assembly.all_aggs = all_aggs
 
-##### FUNCTIONS FOR GENERATING REGULAR AGGREGATE SHAPES #####
 
-# Generate an assembly consisting of a single dumbbell-shaped aggregate. User may specify a mass and "radius" for the whole agg, 
-# or for each particle (using the pmass and pradius arguments in lieu of mass and radius). Suggest passing keyword arguments only to avoid confusion. 
-# Specifying orientation in this way obviously leaves some degeneracy in the final attitude of the agg but gives the user some degree of
-# control. This may be improved in the future.
-def make_db(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1), color=2, pmass=0, pradius=0, sep_coeff=np.sqrt(3), units='pkd'):
-    # Ensure that user supplies at least one set of mass/radius arguments.
+### Internal Functions for Regular Aggs ###
+def _checkRegularAggMR(mass, radius, pmass, pradius):
     if (mass <= 0 or radius <= 0) and (pmass <= 0 or pradius <= 0):
-        raise ValueError("One pair of either mass and radius, or pmass and pradius must both be positive.")
-    # Make sure user doesn't overconstrain the agg.
+        raise ValueError("One pair of either mass and radius or pmass and pradius must "
+                           "both be positive and non-zero.")
     if (radius > 0 and pradius > 0) or (mass > 0 and pmass > 0):
-        raise ValueError("Specify *either* aggregate mass and radius, *or* mass and radius of consituent particles.")
+        raise ValueError("User can specify *either* aggregate mass and radius *or* "
+                          "constituent sphere mass and radius, but not both.")
 
-    # Avoiding overlap between 'units' as an argument of this function and 'units' as an Assembly attribute.
-    temp_units = units
+def _vectorRotate(vector, axis, angle):	#There MUST be a more efficient way to do this
+    sinangle = np.sin(angle)
+    cosangle = np.cos(angle)
+    dot = np.dot(vector, axis)
+    x = vector[0]
+    y = vector[1]
+    z = vector[2]
+    u = axis[0]
+    v = axis[1]
+    z = axis[2]
 
-    # If user has specified agg mass or radius, set *particle* mass and radius (pmass and pradius) accordingly and continue.
-    # Aggregate "radius" is taken to be the maximum distance between agg center and a particle edge. The "separation" s (or "sep")
-    # is given by sep_coeff*pradius and is taken to be the distance between particle centers in the dumbbell case.
-    # Need to account for this when converting between agg radius and particle radius.
+    rotated = np.empty(3)
+
+    rotated[0] = u*dot + (x*(v*v + w*w) - u*(v*y + w*z))*cosangle + (-w*y + v*z)*sinangle
+    rotated[1] = v*dot + (y*(u*u + w*w) - v*(u*x + w*z))*cosangle + (w*x - u*z)*sinangle
+    rotated[2] = w*dot + (z*(u*u + v*v) - w*(u*x + v*y))*cosangle + (-v*x + u*y)*sinangle
+
+    return rotated
+
+
+def _angleBetween(vector1, vector2):
+    u_vector1 = vector1/np.linalg.norm(vector1)
+    u_vector2 = vector2/np.linalg.norm(vector2)
+    return np.arccos(np.clip(np.dot(u_vector1, u_vector2), -1.0, 1.0))
+
+
+def _rotateAgg(agg, orient_init, orient_final):
+    axis = np.cross(orient_init, orient_final)
+    angle = _angleBetween(orient_init, orient_final)
+
+    if np.linalg.norm(axis) == 0 or angle == 0:
+        return agg
+    else:
+        unit_axis = axis/np.linalg.norm(axis)
+        agg.rotate(axis, angle)
+        return agg
+
+
+def _genRegularAgg(iOrder, iOrgIdx, center, orientation, color, pmass, pradius, sep,
+                    pcenter_array, time, units):
+    # Make constituent particles
+    pcenters = sep * pcenter_array
+
+    particle_list = []
+    for i in range(len(pcenters)):
+        particle_list.append(ssedit.Particle(iOrder + i, iOrgIdx, pmass, pradius,
+                              pcenters[i, 0], pcenters[i, 1], pcenters[i, 2],
+                              0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=units))
+
+    # Create aggregate
+    agg = Assembly(*particle_list, time=time, units=units)
+
+    # Rotate & translate aggregate to user-specified orientation and position
+    agg = _rotateAgg(agg, np.array([0, 0, 1]), np.array(orientation))
+    agg.set_center(center)
+
+    return agg
+
+
+### Generating Regular Aggs ###
+def makeCube(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1),
+              color=7, pmass=0, pradius=0, sep_coeff=np.sqrt(3), time=0.0, units='pkd'):
+    # Input checking
+    _checkRegularAggMR(mass, radius, pmass, pradius)
+
+    # Define constants from user inputs
+    if mass > 0 or radius > 0:	# Agg radius = sqrt(3)*sep/2 + pradius
+        pmass = mass/8
+        pradius = radius/(1 + np.sqrt(3) * sep_coeff/2)
+
+    sep = sep_coeff * pradius
+
+    # Place constituent particles
+    particle_centers = np.array([[1, 1, -1], [1, -1, -1], [-1, -1, -1], [-1, 1, -1],
+                                [1, 1, 1], [1, -1, 1], [-1, -1, 1], [-1, 1, 1]])
+
+    # Create aggregate
+    cube = _genRegularAgg(iOrder, iOrgIdx, center, orientation, color, pmass, pradius,
+                           sep/2, particle_centers, time, units)
+    return cube
+
+
+def makeDB(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1),
+              color=2, pmass=0, pradius=0, sep_coeff=np.sqrt(3), time=0.0, units='pkd'):
+    # Input checking
+    _checkRegularAggMR(mass, radius, pmass, pradius)
+
+    # Define constants from user inputs
     if mass > 0 or radius > 0:
         pmass = mass/2
-        pradius = radius*(1 + sep_coeff/2)**(-1)
+        pradius = radius/(1 + sep_coeff/2)
 
-    # Set particle separation for placement within the agg and set relative center positions. These will be translated
-    # by the specified agg center location after the desired orientation is applied.
-    sep = sep_coeff*pradius
-    p0_center = np.array([0,0,-sep/2])
-    p1_center = np.array([0,0,+sep/2])
-    p0 = Particle(iOrder, iOrgIdx, pmass, pradius, p0_center[0], p0_center[1], p0_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p1 = Particle(iOrder + 1, iOrgIdx, pmass, pradius, p1_center[0], p1_center[1], p1_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
+    sep = sep_coeff * pradius
 
-    agg = Assembly(p0, p1, units=temp_units)
+    # Place constituent particles
+    particle_centers = np.array([[0, 0, -1], [0, 0, 1]])
 
-    # Set orientation. (0,0,1) is the default. Again, note that particle centers are translated *after* agg is rotated.
-    # Order of operations matters here! Check first if rotation is necessary to avoid annoying warnings from rotate() method.
-    axis = np.cross(np.array([0,0,1]), np.array(orientation))
-    angle = angle_between(np.array([0,0,1]), np.array(orientation))
+    # Create aggregate
+    dumbbell = _genRegularAgg(iOrder, iOrgIdx, center, orientation, color, pmass, pradius,
+                           sep/2, particle_centers, time, units)
+    return dumbbell
 
-    if np.linalg.norm(axis) == 0 or angle == 0:
-        for particle in agg:
-            particle.x += center[0]
-            particle.y += center[1]
-            particle.z += center[2]
-        return agg
-    else:
-        # Normalize axis.
-        axis = axis/np.linalg.norm(axis)
-        agg.rotate(axis, angle)
-        for particle in agg:
-            particle.x += center[0]
-            particle.y += center[1]
-            particle.z += center[2]
-        return agg
 
-# Generate a planar diamond-shaped aggregate.
-def make_diamond(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1), color=12, pmass=0, pradius=0, sep_coeff=np.sqrt(3), units='pkd'):
-    if (mass <= 0 or radius <= 0) and (pmass <= 0 or pradius <= 0):
-        raise ValueError("One pair of either mass and radius, or pmass and pradius must both be positive.")
-    if (radius > 0 and pradius > 0) or (mass > 0 and pmass > 0):
-        raise ValueError("Specify *either* aggregate mass and radius, *or* mass and radius of consituent particles.")
+def makeDiamond(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1),
+              color=12, pmass=0, pradius=0, sep_coeff=np.sqrt(3), time=0.0, units='pkd'):
+    # Input checking
+    _checkRegularAggMR(mass, radius, pmass, pradius)
 
-    temp_units = units
-
-    # In the case of planar diamonds, the relation between particle radius and agg radius is different. Agg radius is s + pradius.
-    if mass > 0 or radius > 0: 
+    # Define constants from user inputs
+    if mass > 0 or radius > 0:
         pmass = mass/4
-        pradius = radius*(1 + sep_coeff)**(-1)
+        pradius = radius/(1 + sep_coeff)
 
-    sep = sep_coeff*pradius
-    p0_center = np.array([0,0,-sep])
-    p1_center = np.array([0,0,+sep])
-    p2_center = np.array([-sep/2,0,0])
-    p3_center = np.array([+sep/2,0,0])
-    p0 = Particle(iOrder, iOrgIdx, pmass, pradius, p0_center[0], p0_center[1], p0_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p1 = Particle(iOrder + 1, iOrgIdx, pmass, pradius, p1_center[0], p1_center[1], p1_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p2 = Particle(iOrder + 2, iOrgIdx, pmass, pradius, p2_center[0], p2_center[1], p2_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p3 = Particle(iOrder + 3, iOrgIdx, pmass, pradius, p3_center[0], p3_center[1], p3_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    
-    agg = Assembly(p0, p1, p2, p3, units=temp_units)
+    sep = sep_coeff * pradius
 
-    axis = np.cross(np.array([0,0,1]), np.array(orientation))
-    angle = angle_between(np.array([0,0,1]), np.array(orientation))
+    # Place constituent particles
+    particle_centers = np.array([[0, 0, -1], [0, 0, 1], [-0.5, 0, 0], [0.5, 0, 0]])
 
-    if np.linalg.norm(axis) == 0 or angle == 0:
-        for particle in agg:
-            particle.x += center[0]
-            particle.y += center[1]
-            particle.z += center[2]
-        return agg
-    else:
-        axis = axis/np.linalg.norm(axis)
-        agg.rotate(axis, angle)
-        for particle in agg:
-            particle.x += center[0]
-            particle.y += center[1]
-            particle.z += center[2]
-        return agg
+    # Create aggregate
+    diamond = _genRegularAgg(iOrder, iOrgIdx, center, orientation, color, pmass, pradius,
+                           sep, particle_centers, time, units)
+    return diamond
 
-# Generate a tetrahedron-shaped aggregate. This function generates a tetrahedron with one flat face on the bottom and an upright
-# pyramid-like orientation. This is in contrast with genTetrahedron() in ssgen2Agg.py, which uses a much more elegant formulation
-# for a tetrahedron with 2 level edges, but lacking an upright orientation. Since we care about orientation here, we use the former
-# approach. Default position should have centroid at the origin.
-def make_tetra(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1), color=3, pmass=0, pradius=0, sep_coeff=np.sqrt(3), units='pkd'):
-    if (mass <= 0 or radius <= 0) and (pmass <= 0 or pradius <= 0):
-        raise ValueError("One pair of either mass and radius, or pmass and pradius must both be positive.")
-    if (radius > 0 and pradius > 0) or (mass > 0 and pmass > 0):
-        raise ValueError("Specify *either* aggregate mass and radius, *or* mass and radius of consituent particles.")
 
-    temp_units = units
+def makeRod(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1),
+              color=5, pmass=0, pradius=0, sep_coeff=np.sqrt(3), time=0.0, units='pkd'):
+    # Input checking
+    _checkRegularAggMR(mass, radius, pmass, pradius)
 
-    if mass > 0 or radius > 0: 
+    # Define constants from user inputs
+    if mass > 0 or radius > 0:
         pmass = mass/4
-        pradius = radius*(1 + sep_coeff/2)**(-1)
+        pradius = radius/(1 + 3*sep_coeff/2)
 
-    # Set particle separation for placement within the agg and set relative center positions. These will be translated
-    # by the specified agg center location after the desired orientation is applied. Given the weird coordinates needed for
-    # laying out the tetrahedron, we specify the locations of vertices on the unit circle as vectors and scale by sep/2.
-    sep = sep_coeff*pradius
-    p0_center = (3*sep/(2*np.sqrt(6)))*np.array([np.sqrt(8/9),0,-1/3])
-    p1_center = (3*sep/(2*np.sqrt(6)))*np.array([-np.sqrt(2/9),np.sqrt(2/3),-1/3])
-    p2_center = (3*sep/(2*np.sqrt(6)))*np.array([-np.sqrt(2/9),-np.sqrt(2/3),-1/3])
-    p3_center = (3*sep/(2*np.sqrt(6)))*np.array([0,0,1])
-    p0 = Particle(iOrder, iOrgIdx, pmass, pradius, p0_center[0], p0_center[1], p0_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p1 = Particle(iOrder + 1, iOrgIdx, pmass, pradius, p1_center[0], p1_center[1], p1_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p2 = Particle(iOrder + 2, iOrgIdx, pmass, pradius, p2_center[0], p2_center[1], p2_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p3 = Particle(iOrder + 3, iOrgIdx, pmass, pradius, p3_center[0], p3_center[1], p3_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    
-    agg = Assembly(p0, p1, p2, p3, units=temp_units)
+    sep = sep_coeff * pradius
 
-    axis = np.cross(np.array([0,0,1]), np.array(orientation))
-    angle = angle_between(np.array([0,0,1]), np.array(orientation))
+    # Place constituent particles
+    particle_centers = np.array([[0, 0, -3], [0, 0, -1], [0, 0, 1], [0, 0, 3]])
 
-    if np.linalg.norm(axis) == 0 or angle == 0:
-        for particle in agg:
-            particle.x += center[0]
-            particle.y += center[1]
-            particle.z += center[2]
-        return agg
-    else:
-        axis = axis/np.linalg.norm(axis)
-        agg.rotate(axis, angle)
-        for particle in agg:
-            particle.x += center[0]
-            particle.y += center[1]
-            particle.z += center[2]
-        return agg
+    # Create aggregate
+    rod = _genRegularAgg(iOrder, iOrgIdx, center, orientation, color, pmass, pradius,
+                           sep/2, particle_centers, time, units)
+    return rod
 
 
-# Generate a 4-particle rod-shaped aggregate. Default orientation is along the z-axis.
-def make_rod(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1), color=5, pmass=0, pradius=0, sep_coeff=np.sqrt(3), units='pkd'):
-    if (mass <= 0 or radius <= 0) and (pmass <= 0 or pradius <= 0):
-        raise ValueError("One pair of either mass and radius, or pmass and pradius must both be positive.")
-    if (radius > 0 and pradius > 0) or (mass > 0 and pmass > 0):
-        raise ValueError("Specify *either* aggregate mass and radius, *or* mass and radius of consituent particles.")
+def makeTetra(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1),
+              color=3, pmass=0, pradius=0, sep_coeff=np.sqrt(3), time=0.0, units='pkd'):
+    # Input checking
+    _checkRegularAggMR(mass, radius, pmass, pradius)
 
-    temp_units = units
-
-    # Placement of particles is straightforward. agg radius is 1.5*sep + pradius.
-    if mass > 0 or radius > 0: 
+    # Define constants from user inputs
+    if mass > 0 or radius > 0:
         pmass = mass/4
-        pradius = radius*(1 + 3*sep_coeff/2)**(-1)
+        pradius = radius/(1 + sep_coeff/2)
 
-    sep = sep_coeff*pradius
-    p0_center = np.array([0,0,-3*sep/2])
-    p1_center = np.array([0,0,-sep/2])
-    p2_center = np.array([0,0,+sep/2])
-    p3_center = np.array([0,0,+3*sep/2])
-    p0 = Particle(iOrder, iOrgIdx, pmass, pradius, p0_center[0], p0_center[1], p0_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p1 = Particle(iOrder + 1, iOrgIdx, pmass, pradius, p1_center[0], p1_center[1], p1_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p2 = Particle(iOrder + 2, iOrgIdx, pmass, pradius, p2_center[0], p2_center[1], p2_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p3 = Particle(iOrder + 3, iOrgIdx, pmass, pradius, p3_center[0], p3_center[1], p3_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    
-    agg = Assembly(p0, p1, p2, p3, units=temp_units)
+    sep = sep_coeff * pradius
 
-    axis = np.cross(np.array([0,0,1]), np.array(orientation))
-    angle = angle_between(np.array([0,0,1]), np.array(orientation))
+    # Place constituent particles
+    particle_centers = np.array([[np.sqrt(8/9), 0, -1/3], [-np.sqrt(2/9), np.sqrt(2/3), -1/3],
+                                  [-np.sqrt(2/9), -np.sqrt(2/3), -1/3], [0, 0, 1]])
 
-    if np.linalg.norm(axis) == 0 or angle == 0:
-        for particle in agg:
-            particle.x += center[0]
-            particle.y += center[1]
-            particle.z += center[2]
-        return agg
+    # Create aggregate
+    tetrahedron = _genRegularAgg(iOrder, iOrgIdx, center, orientation, color, pmass, pradius,
+                           3*sep/(2*np.sqrt(6)), particle_centers, time, units)
+    return tetrahedron
+
+### Generating Irregular Aggs ###
+
+## Generate a random convex/concave polyhedron
+# Reference: https://link-springer-com.proxy-um.researchport.umd.edu/content/pdf/10.1007/s12205-018-0182-8.pdf
+def _genPointCloud(N_points):
+    if N_points <= 3:
+        raise ValueError("Cannot generate an irregular polyhedron with fewer than 4 vertices")
+    rng = np.random.default_rng()
+    points = 2.0 * rng.random(size=[N_points, 3]) - 1.0
+    return points
+
+
+def _PCARotation(point_cloud):	#This choice of method is thanks to a chatGPT suggestion
+    # Principal component analysis (PCA) to align principal axes with cartesian axes
+    pca = PCA(n_components=3)
+    pca.fit(point_cloud)
+    rot_matrix = pca.components_.T
+    new_points = rot_matrix.dot(point_cloud.T).T
+    return rot_matrix, new_points
+
+def _minBBox(vertices):
+    # Define the minimum bounding box of a hull
+    dimensions = np.empty(3)
+    center = np.empty(3)
+    for i in range(3):	# Iterate over length, width, height (x,y,z)
+        min, max = np.min(vertices[:, i]), np.max(vertices[:, i])
+        dimensions[i] = max - min
+
+    return dimensions
+
+def _pointExtension(points, alphas):
+    # Extend all points to better fit the desired dimensions
+    return points + points*alphas
+
+def _genPolyHull(Radius, axis_ratios, N_points, concave=False):
+    # Generate a random polyhedral with the given axis ratios and
+    #  a number of vertices similar to N_points (w/in an order of magnitude)
+
+    # Initialize desired component axis lengths
+    input_dims = 2*Radius * np.append(1.0, axis_ratios)
+
+    # Generate a random cloud of points
+    init_points = _genPointCloud(N_points)
+
+    # Rotate the point cloud so that the minimum bounding box will align w/ Cartesian axes
+    rot_matrix, points_rotated = _PCARotation(init_points)
+
+    # Create the convex hull around the point cloud
+    if concave:
+        init_hull = alphashape.alphashape(points_rotated, alpha=0.1*Radius)	# 0.1 is a choice!
+        hull_vertices = init_hull.vertices
     else:
-        axis = axis/np.linalg.norm(axis)
-        agg.rotate(axis, angle)
-        for particle in agg:
-            particle.x += center[0]
-            particle.y += center[1]
-            particle.z += center[2]
-        return agg
+        init_hull = ConvexHull(points_rotated)
+        hull_vertices = init_hull.points[init_hull.vertices]
 
-# Generate an 8-particle cube. Centered at the origin and faces parallel to x-, y-, and z- axes.
-def make_cube(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1), color=7, pmass=0, pradius=0, sep_coeff=np.sqrt(3), units='pkd'):
-    if (mass <= 0 or radius <= 0) and (pmass <= 0 or pradius <= 0):
-        raise ValueError("One pair of either mass and radius, or pmass and pradius must both be positive.")
-    if (radius > 0 and pradius > 0) or (mass > 0 and pmass > 0):
-        raise ValueError("Specify *either* aggregate mass and radius, *or* mass and radius of consituent particles.")
+    bbox_dims = _minBBox(hull_vertices)
+    while not np.array_equal(input_dims, bbox_dims):
+        # Adjust point locations to maximally fill volume specified by input radius, axis ratios
+        extension_coeffs = 1 - (bbox_dims/input_dims)
+        hull_vertices = _pointExtension(hull_vertices, extension_coeffs)
 
-    temp_units = units
+        # Determine minimum bounding box around the hull
+        bbox_dims = _minBBox(hull_vertices)
 
-    # agg radius is sqrt(3)*sep/2 + pradius.
-    if mass > 0 or radius > 0: 
-        pmass = mass/8
-        pradius = radius*(1 + np.sqrt(3)*sep_coeff/2)**(-1)
-
-    sep = sep_coeff*pradius
-    p0_center = np.array([+sep/2,+sep/2,-sep/2])
-    p1_center = np.array([+sep/2,-sep/2,-sep/2])
-    p2_center = np.array([-sep/2,-sep/2,-sep/2])
-    p3_center = np.array([-sep/2,+sep/2,-sep/2])
-    p4_center = np.array([+sep/2,+sep/2,+sep/2])
-    p5_center = np.array([+sep/2,-sep/2,+sep/2])
-    p6_center = np.array([-sep/2,-sep/2,+sep/2])
-    p7_center = np.array([-sep/2,+sep/2,+sep/2])
-    p0 = Particle(iOrder, iOrgIdx, pmass, pradius, p0_center[0], p0_center[1], p0_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p1 = Particle(iOrder + 1, iOrgIdx, pmass, pradius, p1_center[0], p1_center[1], p1_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p2 = Particle(iOrder + 2, iOrgIdx, pmass, pradius, p2_center[0], p2_center[1], p2_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p3 = Particle(iOrder + 3, iOrgIdx, pmass, pradius, p3_center[0], p3_center[1], p3_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p4 = Particle(iOrder + 4, iOrgIdx, pmass, pradius, p4_center[0], p4_center[1], p4_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p5 = Particle(iOrder + 5, iOrgIdx, pmass, pradius, p5_center[0], p5_center[1], p5_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p6 = Particle(iOrder + 6, iOrgIdx, pmass, pradius, p6_center[0], p6_center[1], p6_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    p7 = Particle(iOrder + 7, iOrgIdx, pmass, pradius, p7_center[0], p7_center[1], p7_center[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=temp_units)
-    
-    agg = Assembly(p0, p1, p2, p3, p4, p5, p6, p7, units=temp_units)
-
-    axis = np.cross(np.array([0,0,1]), np.array(orientation))
-    angle = angle_between(np.array([0,0,1]), np.array(orientation))
-
-    if np.linalg.norm(axis) == 0 or angle == 0:
-        for particle in agg:
-            particle.x += center[0]
-            particle.y += center[1]
-            particle.z += center[2]
-        return agg
+    # Calculate hull around final constrained points
+    if concave:
+        final_hull = alphashape.alphashape(hull_vertices, alpha=0.1*Radius)
     else:
-        axis = axis/np.linalg.norm(axis)
-        agg.rotate(axis, angle)
-        for particle in agg:
-            particle.x += center[0]
-            particle.y += center[1]
-            particle.z += center[2]
-        return agg
+        final_hull = ConvexHull(hull_vertices)
+
+    return final_hull
+
+## Fill a polyhedral hull
+
+def _genInitialSpheres(radius, vertices, ndivisions):
+    # Generate a grid of points within the bounding box of the hull
+    #  Initial radii set to Rmin
+    init = np.empty([3,ndivisions])
+    for i in range(3):
+        min, max = np.min(vertices[:,i]), np.max(vertices[:,i])
+        di = (max - min)/ndivisions
+        init[i] = np.fromiter((min + (j * di) for j in range(ndivisions)), float)
+
+    X, Y, Z = np.meshgrid(*init)
+    points = np.vstack([X.ravel(), Y.ravel(), Z.ravel()])
+
+    return points, radius * np.ones(points.shape[-1])
+
+def _genLinearConstraintConvex(hull):
+    # Define plane equations of facets. Qhull hyperplane equations given s.t. Ax <= -b
+    #  hull.equations returns [x,y,z,b], A = [x,y,z]
+    normals = hull.equations[:,:-1]
+
+    A = np.hstack([normals, np.ones([len(normals),1])])
+    B = -hull.equations[:,-1]
+
+    return sco.LinearConstraint(A, lb=-np.inf, ub=B)
+
+def _genLinearConstraintConcave(hull):	#See above for descriptions
+    A = np.hstack([hull.facets_normal, np.ones([len(hull.facets_normal),1])])
+    B = np.einsum('ij,ij->i', hull.facets_normal, hull.facets_origin)
+
+    return sco.LinearConstraint(A, lb=-np.inf, ub=B)
+
+def _genNonlinearConstraint(spheres, ovlp):
+    # C(X) <= 0 (in our case)
+    function = lambda x: -(x[0] - spheres[0])**2 - (x[1] - spheres[1])**2 - (x[2] - spheres[2])**2 + ((1 - ovlp) * x[3] + spheres[3])**2
+    return sco.NonlinearConstraint(function, lb=-np.inf, ub=0)
+
+def _fillPoly(hull, r_min, r_max, overlap_fraction, concave=False):
+    # Fill a polygon with spheres. Follows Sec 4 of the above referenced paper.
+
+    # Generate initial values and radii
+    if concave:
+        hull_vertices = hull.vertices
+    else:
+        hull_vertices = hull.points[hull.vertices]
+
+    sph_pos, sph_radii = _genInitialSpheres(r_min, hull_vertices, 10)	# 10 is a choice, to get enough total spheres
+    spheres_init = np.vstack([sph_pos, sph_radii]).T
+
+    spheres_final = np.empty([4,0])	# Output list for particle positions & radii
+
+    ## Nonlinear optimization equation: minimize F(X) = -Radius s.t.
+    ##  constraints: A*X<=B, A_eq*X=B_eq, (linear); AND C(X)<=0, C_eq(X)=0 (nonlinear)
+    min_func = lambda x: -x[3]	# Maximize sphere radius to fit inside the hull
+
+    # Transform polyhedron face to the form of point + outward normal; define linear constraint
+    if concave:
+        linear_constraint = _genLinearConstraintConcave(hull)
+    else:
+        linear_constraint = _genLinearConstraintConvex(hull)
+
+    # Set bounds for particle x, y, z, and r (necessary?)
+    bounds = []
+    for i in range(3):
+        bounds += [(np.min(hull_vertices[:,i]), np.max(hull_vertices[:,i]))]
+    bounds += [(r_min, r_max)]
+
+    # Select a sphere position from the "initial" point set as the "initial guess"
+    for sph in spheres_init:
+        spheres_final = np.hstack([spheres_final, sph[:,np.newaxis]])
+        cons = (linear_constraint, _genNonlinearConstraint(spheres_final, overlap_fraction))
+
+        # Find likely sph position w/ scipy.opt.minimize()
+        result = sco.minimize(min_func, sph, method='SLSQP', bounds=bounds, constraints=cons)
+
+        # If sph radius outside limiting radius, discard
+        if result.success:
+            spheres_final = np.hstack((spheres_final.T[:-1].T, result.x[:,np.newaxis]))
+        else:
+            spheres_final = spheres_final.T[:-1].T
+
+    return spheres_final
+
+## Generate and fill an irregular shape ##
+def _sphVolume(radii):
+    # Volume of a sphere
+    return 4 * np.pi * (radii**3) / 3
+
+def _calcMassFromTotal(m_tot, radii):
+    # Calculate sphere mass from agg total mass. Assumes equal density spheres.
+    volumes = _sphVolume(radii)
+    volume_fractions = volumes/volumes.sum()
+    return m_tot * volume_fractions
+
+def _calcMassFromDens(density, radii):
+    # Caluclate sphere mass from agg density. Assumes equal density spheres.
+    volumes = _sphVolume(radii)
+    return density * volumes
+
+def _genIrregularAgg(iOrder, iOrgIdx, center, orientation, color, pmasses, pradii,
+                      pcenter_array, time, units):
+    # Make constituent particles
+    particle_list = []
+    for i in range(len(pcenter_array)):
+        particle_list.append(ssedit.Particle(iOrder + i, iOrgIdx, pmasses[i], pradii[i],
+                              pcenter_array[i, 0], pcenter_array[i, 1], pcenter_array[i, 2],
+                              0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=units))
+
+    # Create aggregate
+    agg = Assembly(*particle_list, time=time, units=units)
+
+    # Rotate and translate aggregate to user-specified orientation and position
+    agg = _rotateAgg(agg, np.array([0, 0, 1]), np.array(orientation))
+    agg.set_center(center)
+
+    return agg
+
+def makeIrregPoly(iOrder=0, iOrgIdx=-1, mass=0, radius=0, center=(0,0,0), orientation=(0,0,1),
+                  color=10, pdens=0, pradius_min=0, pradius_max=0, sep_coeff=np.sqrt(3),
+                  axis_ratios=(0.75,0.5), concave=False, time=0.0, units='pkd'):
+    # Generate a polyhedral hull and fill it efficienctly with spheres in the size range
+    # [pradius_min, pradius_max]
+    if (radius <= 0 or pradius_min <= 0) and (mass <= 0 or pdens_min <= 0):
+        raise ValueError("User must specify both radius and minimum constituent particle "
+                          "radius, plus either the total agg mass or the density of "
+                          "the constituent particles. All of these quantities must be "
+                          "positive.")
+    if (mass > 0 and pdens > 0):
+        raise ValueError("User can specify *either* aggregate mass *or* constituent "
+                          "sphere density, but not both.")
+    if (pradius_max < pradius_min):
+        raise ValueError("Maximum allowable particle radius must be greater than or "
+                          "equal to minimum allowable constituent particle radius.")
+    #if (concave and not alphashape_installed):
+    #    raise ValueError("User cannot specify concave polyhedra without downloading "
+    #                      "and installing the 'alphashape' library from PyPI.")
+
+    # Generate polyhedral hull based on input parameters
+    #  -Should make some choice about nVertices? (3rd argument in _genPolyHull)
+    poly_hull = _genPolyHull(radius, axis_ratios, 10*np.floor(radius/pradius_min), concave=concave)
+
+    # Find positions [0-2] and radii [3] of particles to most efficiently fill the agg
+    beta_ovlp = (sep_coeff/2) - 1
+    constituent_array = _fillPoly(poly_hull, pradius_min, pradius_max, beta_ovlp, concave=concave)
+    particle_centers = constituent_array[:3].T
+    pradii = constituent_array[3]
+
+    # Calculate masses based on input mass or particle density
+    if mass > 0:
+        pmasses = _calcMassFromTotal(mass, pradii)
+    elif pdens > 0:
+        pmasses = _calcMassFromDens(pdens, pradii)
+
+    # Create aggregate
+    polyhedron = _genIrregularAgg(iOrder, iOrgIdx, center, orientation, color, pmasses,
+                            pradii, particle_centers, time, units)
+
+    return polyhedron
