@@ -41,7 +41,7 @@ Assembly.agg_max = agg_max
 
 def agg_min(self):
     return max([particle.iOrgIdx for particle in self if particle.iOrgIdx < 0])
-Assembly.agg_range = agg_range
+Assembly.agg_min = agg_min
 
 def agg_range(self):
     agg_tags = [particle.iOrgIdx for particle in self if particle.iOrgIdx < 0]
