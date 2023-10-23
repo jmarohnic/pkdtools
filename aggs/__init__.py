@@ -12,8 +12,8 @@ from .aggs import pop_agg
 from .aggs import fix_orphans
 from .aggs import condense_aggs
 from .aggs import all_aggs
-from .aggs import make_db
-from .aggs import make_diamond
-from .aggs import make_tetra
-from .aggs import make_rod
-from .aggs import make_cube
+from .aggs import makeDB
+from .aggs import makeDiamond
+from .aggs import makeTetra
+from .aggs import makeRod
+from .aggs import makeCube
