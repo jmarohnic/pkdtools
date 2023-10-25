@@ -315,7 +315,6 @@ def largest_fragment_volcore(q, vinf, steplist, units='pkd'):
         if depth_dict[particle.iOrder] == 1:
             core_total += 1
 
-    print(core_total/large.N())
     return core_total/large.N()
 
 # Return the fraction of material in the largest fragment that came from the inner 50% of the initial body by *radius*. Identical to
@@ -347,7 +346,6 @@ def largest_fragment_radcore(q, vinf, steplist, units='pkd'):
         if depth_dict[particle.iOrder] == 1:
             core_total += 1
 
-    print(core_total/large.N())
     return core_total/large.N()
 
 # Need to write up a better version of this---get a better handle on units first. Currently returns a value in km regardless of units input.
