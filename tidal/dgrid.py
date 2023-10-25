@@ -371,15 +371,16 @@ def tidal_threshold(q, vinf, steplist, units='pkd'):
 
 # Determine if a run is done evolving.
 def tidal_run_complete(q, vinf, steplist, units='pkd'):
+    L = 3.5
     # Load initial and final step data, divide into fragments and calculate the mass fraction bound to the largest piece.
     init = ss_in(steplist[0], units=units)
     init = init.rm_earth()
-    init_frags = init.find_rp(L=1.2)
+    init_frags = init.find_rp(L=L)
     init_bound_frac = largest_fragment_bound(init_frags)
 
     final = ss_in(steplist[-1], units=units)
     final = final.rm_earth()
-    final_frags = final.find_rp(L=1.2)
+    final_frags = final.find_rp(L=L)
     final_bound_frac = largest_fragment_bound(final_frags)
 
     # Every tidal run should have an associated sstidal.log file, which includes a calculated periapse time.
@@ -400,7 +401,7 @@ def tidal_run_complete(q, vinf, steplist, units='pkd'):
     # output prior to final output. This will depend on iOutInterval setting, but should be good enough for now.
     prev = ss_in(steplist[-10], units=units)
     prev = prev.rm_earth()
-    prev_frags = prev.find_rp(L=1.2)
+    prev_frags = prev.find_rp(L=L)
     prev_bound_frac = largest_fragment_bound(prev_frags)
 
     if (final_bound_frac < 0.9*prev_bound_frac) or (final_bound_frac > 1.1*prev_bound_frac):
