@@ -12,6 +12,7 @@
 import numpy as np
 from ..particle import Particle
 from ..assembly import Assembly
+from .. import util
 
 try:
     import scipy.optimize as sco
@@ -49,14 +50,16 @@ def agg_range(self):
 Assembly.agg_range = agg_range
 
 """
+Sample functions using agg_list() instead, for simplicity (perhaps not efficiency?)
+
 def agg_max(self):
-    return self.agg_list[-1]	# or max(agg_list)
+    return self.agg_list()[-1]	# or max(self.agg_list())
 
 def agg_min(self):
-    return self.agg_list[0]	# or min(agg_list)
+    return self.agg_list()[0]	# or min(self.agg_list())
 
 def agg_range(self):
-    return (self.agg_max, self.agg_min)
+    return (self.agg_max(), self.agg_min())
 """
 
 def agg_list(self):
@@ -193,35 +196,10 @@ def _checkRegularAggMR(mass, radius, pmass, pradius):
         raise ValueError("User can specify *either* aggregate mass and radius *or* "
                           "constituent sphere mass and radius, but not both.")
 
-def _vectorRotate(vector, axis, angle):	#There MUST be a more efficient way to do this
-    sinangle = np.sin(angle)
-    cosangle = np.cos(angle)
-    dot = np.dot(vector, axis)
-    x = vector[0]
-    y = vector[1]
-    z = vector[2]
-    u = axis[0]
-    v = axis[1]
-    z = axis[2]
-
-    rotated = np.empty(3)
-
-    rotated[0] = u*dot + (x*(v*v + w*w) - u*(v*y + w*z))*cosangle + (-w*y + v*z)*sinangle
-    rotated[1] = v*dot + (y*(u*u + w*w) - v*(u*x + w*z))*cosangle + (w*x - u*z)*sinangle
-    rotated[2] = w*dot + (z*(u*u + v*v) - w*(u*x + v*y))*cosangle + (-v*x + u*y)*sinangle
-
-    return rotated
-
-
-def _angleBetween(vector1, vector2):
-    u_vector1 = vector1/np.linalg.norm(vector1)
-    u_vector2 = vector2/np.linalg.norm(vector2)
-    return np.arccos(np.clip(np.dot(u_vector1, u_vector2), -1.0, 1.0))
-
 
 def _rotateAgg(agg, orient_init, orient_final):
     axis = np.cross(orient_init, orient_final)
-    angle = _angleBetween(orient_init, orient_final)
+    angle = util.angle_between(orient_init, orient_final)
 
     if np.linalg.norm(axis) == 0 or angle == 0:
         return agg
@@ -238,7 +216,7 @@ def _genRegularAgg(iOrder, iOrgIdx, center, orientation, color, pmass, pradius, 
 
     particle_list = []
     for i in range(len(pcenters)):
-        particle_list.append(ssedit.Particle(iOrder + i, iOrgIdx, pmass, pradius,
+        particle_list.append(Particle(iOrder + i, iOrgIdx, pmass, pradius,
                               pcenters[i, 0], pcenters[i, 1], pcenters[i, 2],
                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=units))
 
@@ -535,7 +513,7 @@ def _genIrregularAgg(iOrder, iOrgIdx, center, orientation, color, pmasses, pradi
     # Make constituent particles
     particle_list = []
     for i in range(len(pcenter_array)):
-        particle_list.append(ssedit.Particle(iOrder + i, iOrgIdx, pmasses[i], pradii[i],
+        particle_list.append(Particle(iOrder + i, iOrgIdx, pmasses[i], pradii[i],
                               pcenter_array[i, 0], pcenter_array[i, 1], pcenter_array[i, 2],
                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, color, units=units))
 
