@@ -68,17 +68,7 @@ def ok_to_merge(rp1, rp2, L):
             return True
 
         # Otherwise, check for one group inside the other.
-
-        r = pos2 - pos1
-        v = np.dot(axes1, r)
-
-        if in_ellipsoid(v, 0.0, semi1):
-            return True
-
-        r = pos1 - pos2
-        v = np.dot(axes2, r)
-
-        if in_ellipsoid(v, 0.0, semi2):
+        if ellipse_intersect(pos1, pos2, semi1, semi2, axes1, axes2, L):
             return True
 
     return False
@@ -177,6 +167,53 @@ def in_ellipsoid(r0, R, a):
     r = r0.copy()
     r = r*(1 + R/d)
     d = (r[0]/a[0])**2 + (r[1]/a[1])**2 + (r[2]/a[2])**2
+
+    if d <= 1:
+        return True
+    else:
+        return False
+
+# This is really rough, should clean this up when there's time.
+def ellipse_intersect(pos1, pos2, semi1, semi2, axes1, axes2, L):
+    if check_vector(semi1) == 0:
+        raise TypeError("semi1 must be a real-valued 3-vector.")
+    if check_vector(semi2) == 0:
+        raise TypeError("semi2 must be a real-valued 3-vector.")
+    if semi1[0] <= 0.0 or semi1[1] <= 0.0 or semi1[2] <= 0.0:
+        raise ValueError("All semi-axes must be positive.")
+    if semi2[0] <= 0.0 or semi2[1] <= 0.0 or semi2[2] <= 0.0:
+        raise ValueError("All semi-axes must be positive.")
+
+    # Convert to numpy arrays for easier manipulation.
+    pos1 = np.array(pos1)
+    pos2 = np.array(pos2)
+    semi1 = np.array(semi1)
+    semi2 = np.array(semi2)
+    R1 = np.mean(semi1)
+    R2 = np.mean(semi2)
+
+    # Check for ellipse 2 in ellipse 1 
+    r0 = pos2 - pos1
+    r0 = np.dot(axes1, r0)
+
+    d = np.linalg.norm(r0)
+    r = r0.copy()
+    # Could be that ellipse 2 is way bigger, in which case we could get a negative value here. If that's the case
+    # just say 0.
+    r = max(1 - L*R2/d, 0.0)*r
+    d = (r[0]/semi1[0])**2 + (r[1]/semi1[1])**2 + (r[2]/semi1[2])**2
+
+    if d <= 1:
+        return True
+    
+    # Check for ellipse 1 in ellipse 2
+    r0 = pos1 - pos2
+    r0 = np.dot(axes2, r0)
+
+    d = np.linalg.norm(r0)
+    r = r0.copy()
+    r = max(1 - L*R1/d, 0.0)*r 
+    d = (r[0]/semi2[0])**2 + (r[1]/semi2[1])**2 + (r[2]/semi2[2])**2
 
     if d <= 1:
         return True
