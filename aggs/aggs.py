@@ -345,7 +345,7 @@ def _genPointCloud(N_points):
     if N_points <= 3:
         raise ValueError("Cannot generate an irregular polyhedron with fewer than 4 vertices")
     rng = np.random.default_rng()
-    points = 2.0 * rng.random(size=[N_points, 3]) - 1.0
+    points = 2.0 * rng.random(size=[int(N_points), 3]) - 1.0
     return points
 
 

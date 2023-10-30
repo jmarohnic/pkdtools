@@ -17,3 +17,4 @@ from .aggs import makeDiamond
 from .aggs import makeTetra
 from .aggs import makeRod
 from .aggs import makeCube
+from .aggs import makeIrregPoly
