@@ -33,3 +33,7 @@ from .dgrid import final_step
 from .pgrid import load_csv_grid
 from .pgrid import load_pickle_grid
 from .pgrid import plot_grid
+
+#Import from dregion.py
+from .dregion import get_coords
+from .dregion import analyze_region

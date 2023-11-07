@@ -88,7 +88,7 @@ def plot_grid(title, rows, columns, datagrids=[], labels=[], cmaps=[], center=No
 
 # Specialized function for plotting a six panel figure. Top three tiles are three plots of a given metric for tidal suites, bottom three
 # are corresponding "differential" plots with the metric shown relative to the spherical case.
-def combo_grid(title, grids, diffgrids, cmap, diffcmap, labels, difflabels, gridcenter=None, diffcenter=None, big_size=32, med_size=28, xtick_freq=2, grid_range=None, diffgrid_range=None):
+def combo_grid(title, grids, diffgrids, cmap, diffcmap, labels, difflabels, gridcenter=None, diffcenter=None, coords_list=[], diffcoords_list=[], big_size=32, med_size=28, xtick_freq=2, grid_range=None, diffgrid_range=None):
     if grid_range == None:
         # Find max and min values across the grids.
         min_grid_val, max_grid_val = min_max_grid(grids)
@@ -131,6 +131,14 @@ def combo_grid(title, grids, diffgrids, cmap, diffcmap, labels, difflabels, grid
         axes.flat[i].set_title(labels[i], fontsize=big_size)
         axes.flat[i].yaxis.set_tick_params(labelsize=med_size)
 
+        # Overplot references points if coords are specified.
+        if len(coords_list) > 0:
+            coords = coords_list[i]
+            # Pull out x and y components and adjust to match heatmap. Not sure why this is necessary...
+            xvals = [10*coord[0] - 10.51 for coord in coords]
+            yvals = [coord[1] + 0.49 for coord in coords]
+            axes.flat[i].scatter(xvals, yvals, c='white', s=10)
+
         # Only include colorbar for last columns of tiles? Not currently implemented.
         cbar = axes.flat[i].collections[0].colorbar
         cbar.ax.tick_params(labelsize=med_size)
@@ -144,6 +152,13 @@ def combo_grid(title, grids, diffgrids, cmap, diffcmap, labels, difflabels, grid
         axes.flat[3+j].set_title(difflabels[j], fontsize=big_size)
         axes.flat[3+j].yaxis.set_tick_params(labelsize=med_size)
         
+        # Overplot references points if coords are specified.
+        if len(diffcoords_list) > 0:
+            diffcoords = diffcoords_list[j]
+            xvals = [10*coord[0] - 10.51 for coord in diffcoords]
+            yvals = [coord[1] + 0.49 for coord in diffcoords]
+            axes.flat[3+j].scatter(xvals, yvals, c='white', s=10)
+
         # Only include colorbar for last columns of tiles? Not currently implemented.
         cbar = axes.flat[3+j].collections[0].colorbar
         cbar.ax.tick_params(labelsize=med_size)
@@ -153,7 +168,7 @@ def combo_grid(title, grids, diffgrids, cmap, diffcmap, labels, difflabels, grid
     axes.flat[4] = False
     axes.flat[5] = False
 
-    fig.text(0.5, 0.0, 'Closest approach distance (Earth radii)', ha='center', fontsize=med_size)
+    fig.text(0.5, 0.01, 'Closest approach distance (Earth radii)', ha='center', fontsize=med_size)
     fig.text(0.04, 0.5, 'Speed at infinity (km/s)', va='center', rotation='vertical', fontsize=med_size)
     fig.text(0.5, 0.95, title, ha='center', fontsize=big_size)
 
@@ -162,17 +177,18 @@ def combo_grid(title, grids, diffgrids, cmap, diffcmap, labels, difflabels, grid
 
 # Similar to combo_grid(), but plots two different six panel figures. One with the low res version and one with the hi res.
 # Color bar max and min values are calculated across all six regular tile plots and all six diff plots to facilitate comparison.
-def dual_combo_grid(lowtitle, hititle, grids, diffgrids, cmap, diffcmap, labels, difflabels, gridcenter=None, diffcenter=None, big_size=32, med_size=28, xtick_freq=2, save=False):
+# coords and diffcoords can be set to lists of tuples. Reference points will be overplotted at these coordinates.
+def dual_combo_grid(lowtitle, hititle, grids, diffgrids, cmap, diffcmap, labels, difflabels, gridcenter=None, diffcenter=None, coords_list=[], diffcoords_list=[], big_size=32, med_size=28, xtick_freq=2, save=False):
     # Find max and min values across the grids.
     min_grid_val, max_grid_val = min_max_grid(grids)
 
     # Find max and min values across the diffgrids.
     min_diff_val, max_diff_val = min_max_grid(diffgrids)
 
-    fig1 = combo_grid(title=lowtitle, grids=grids[:3], diffgrids=diffgrids[:3], cmap=cmap, diffcmap=diffcmap, labels=labels[:3], difflabels=difflabels[:3], gridcenter=gridcenter, diffcenter=diffcenter, big_size=big_size, med_size=med_size, xtick_freq=xtick_freq, grid_range=(min_grid_val, max_grid_val), diffgrid_range=(min_diff_val, max_diff_val))
+    fig1 = combo_grid(title=lowtitle, grids=grids[:3], diffgrids=diffgrids[:3], cmap=cmap, diffcmap=diffcmap, labels=labels[:3], difflabels=difflabels[:3], gridcenter=gridcenter, diffcenter=diffcenter, coords_list=coords_list[:3], diffcoords_list=diffcoords_list[:3], big_size=big_size, med_size=med_size, xtick_freq=xtick_freq, grid_range=(min_grid_val, max_grid_val), diffgrid_range=(min_diff_val, max_diff_val))
     plt.show()
 
-    fig2 = combo_grid(title=hititle, grids=grids[3:6], diffgrids=diffgrids[3:6], cmap=cmap, diffcmap=diffcmap, labels=labels[3:6], difflabels=difflabels[3:6], gridcenter=gridcenter, diffcenter=diffcenter, big_size=big_size, med_size=med_size, xtick_freq=xtick_freq, grid_range=(min_grid_val, max_grid_val), diffgrid_range=(min_diff_val, max_diff_val))
+    fig2 = combo_grid(title=hititle, grids=grids[3:6], diffgrids=diffgrids[3:6], cmap=cmap, diffcmap=diffcmap, labels=labels[3:6], difflabels=difflabels[3:6], gridcenter=gridcenter, diffcenter=diffcenter, coords_list=coords_list[3:6], diffcoords_list=diffcoords_list[3:6], big_size=big_size, med_size=med_size, xtick_freq=xtick_freq, grid_range=(min_grid_val, max_grid_val), diffgrid_range=(min_diff_val, max_diff_val))
     plt.show()
 
 def min_max_grid(grids):
